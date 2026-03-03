@@ -45,8 +45,8 @@
   </div>
   <div id="abilityBar">
     <div class="ab-slot"><div class="ab-icon"><span id="ab1icon">⚡</span><div class="ab-cd" id="ab1cd" style="height:0%"></div></div><div class="ab-key">Q</div></div>
-    <div class="ab-slot"><div class="ab-icon"><span id="ab2icon">💥</span><div class="ab-cd" id="ab2cd" style="height:0%"></div></div><div class="ab-key">E</div></div>
-    <div class="ab-slot"><div class="ab-icon"><span id="ab3icon">🛡</span><div class="ab-cd" id="ab3cd" style="height:0%"></div></div><div class="ab-key">R</div></div>
+    <div class="ab-slot"><div class="ab-icon"><span id="ab2icon">✴︎</span><div class="ab-cd" id="ab2cd" style="height:0%"></div></div><div class="ab-key">E</div></div>
+    <div class="ab-slot"><div class="ab-icon"><span id="ab3icon">⛊</span><div class="ab-cd" id="ab3cd" style="height:0%"></div></div><div class="ab-key">R</div></div>
   </div>
   <div id="bossWarning">⚠ BOSS INCOMING ⚠</div>
   <div id="overlay"></div>
@@ -154,8 +154,8 @@ const SHIPS = [
     bulletSpeed:480, bulletDamage:12,
     abilities:[
       {name:'RAPID FIRE',icon:'⚡',cd:5,  desc:'Q: Triple burst'},
-      {name:'NOVA SHOT', icon:'💥',cd:12, desc:'E: Big blast'},
-      {name:'BOOST',     icon:'🚀',cd:8,  desc:'R: Speed dash'}
+      {name:'NOVA SHOT', icon:'✴︎',cd:12, desc:'E: Big blast'},
+      {name:'BOOST',     icon:'❯❯',cd:8,  desc:'R: Speed dash'}
     ],
     useAbility(g,i){
       if(i===0){for(let j=0;j<6;j++)setTimeout(()=>g.playerShoot(true),j*60);}
@@ -170,9 +170,9 @@ const SHIPS = [
     speed:140, hp:180, fireRate:0.28,
     bulletSpeed:400, bulletDamage:18,
     abilities:[
-      {name:'SPREAD',   icon:'🔫',cd:6,  desc:'Q: Wide spread'},
+      {name:'SPREAD',   icon:'⌖',cd:6,  desc:'Q: Wide spread'},
       {name:'NUKE',     icon:'☢', cd:20, desc:'E: Screen bomb'},
-      {name:'ARMOR UP', icon:'🛡',cd:15, desc:'R: Invincible'}
+      {name:'ARMOR UP', icon:'⛊',cd:15, desc:'R: Invincible'}
     ],
     useAbility(g,i){
       if(i===0){for(let a=-3;a<=3;a+=1.5)g.bullets.push({x:g.player.x,y:g.player.y-10,dx:a*60,dy:-380,damage:14,size:5,color:'#ff6644',owner:'player'});}
@@ -187,9 +187,9 @@ const SHIPS = [
     speed:300, hp:70, fireRate:0.2,
     bulletSpeed:520, bulletDamage:10,
     abilities:[
-      {name:'PHASE',     icon:'👻',cd:8,  desc:'Q: Cloak & dodge'},
-      {name:'TWIN BOLT', icon:'⚡',cd:10, desc:'E: Dual homing'},
-      {name:'WARP',      icon:'🌀',cd:12, desc:'R: Teleport fwd'}
+      {name:'PHASE',     icon:'⚠︎',cd:8,  desc:'Q: Cloak & dodge'},
+      {name:'TWIN BOLT', icon:'⊹',cd:10, desc:'E: Dual homing'},
+      {name:'WARP',      icon:'𖣐',cd:12, desc:'R: Teleport fwd'}
     ],
     useAbility(g,i){
       if(i===0){g.player.cloaked=true;g.player.cloakTimer=3;g.player.invincible=true;g.player.invincibleTimer=3;}
@@ -542,7 +542,7 @@ class Game {
     for(const pw of this.powerups){
       ctx.save();ctx.globalAlpha=0.7+Math.sin(this.elapsed*5)*0.2;
       ctx.font='20px serif';ctx.textAlign='center';
-      ctx.fillText(pw.type==='hp'?'❤':pw.type==='shield'?'🛡':'✨',pw.x,pw.y);
+      ctx.fillText(pw.type==='hp'?'❤':pw.type==='shield'?'⛊':'⟡',pw.x,pw.y);
       ctx.restore();
     }
 
