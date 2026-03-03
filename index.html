@@ -206,6 +206,7 @@ class Game {
   constructor(shipDef, themeIdx) {
     this.shipDef = shipDef;
     this.themeIdx = themeIdx;
+    this.theme = BG_THEMES[themeIdx];
     this.score=0; this.wave=1; this.waveSpawnAccum=0;
     this.running=false; this.gameOver=false;
     this.player={
@@ -218,10 +219,11 @@ class Game {
     };
     this.keys={};
     this.bullets=[]; this.enemies=[]; this.particles=[]; this.powerups=[];
-    this.abilities=shipDef.abilities.map(a=>Object.assign({},a,{cdLeft:0}));
+    this.abilities = shipDef.abilities.map(a => ({ ...a, cdLeft: 0, cd: a.cd }));
     this.killCount=0; this.bossActive=false; this.nextBossWave=5;
     this.multiplier=1; this.multiplierTimer=0;
     this.camShake=0; this.nukeFlash=0; this.elapsed=0;
+    this.waveKillThreshold = 10;
   }
 
   bindInput() {
@@ -242,9 +244,12 @@ class Game {
   }
 
   tryAbility(i) {
-    if(!this.running||this.gameOver) return;
-    const ab=this.abilities[i];
-    if(ab.cdLeft<=0){ ab.cdLeft=ab.cd; this.shipDef.useAbility(this,i); }
+    if (!this.running || this.gameOver || this.player.hp <= 0) return;
+    const ab = this.abilities[i];
+    if (ab.cdLeft <= 0 && ab.cd > 0) {
+      ab.cdLeft = ab.cd;
+      this.shipDef.useAbility(this, i);
+    }
   }
 
   update(dt) {
@@ -348,11 +353,21 @@ class Game {
         e.dx+=(tx/d)*60*dt;e.dy+=(ty/d)*60*dt;
         const sp=Math.sqrt(e.dx*e.dx+e.dy*e.dy),ms=e.maxSpeed||100;
         if(sp>ms){e.dx=e.dx/sp*ms;e.dy=e.dy/sp*ms;}
-      } else if(e.behavior==='boss'){
-        e.bossT=(e.bossT||0)+dt;
-        e.dx=Math.sin(e.bossT*0.8)*140;
-        e.dy=Math.sin(e.bossT*0.3)*30;
-        e.y=Math.max(80,Math.min(280,e.y));
+      } else if (e.behavior === 'boss') {
+        if (e.entryPhase) {
+          // Fly down to starting position first
+          e.dy = 60;
+          if (e.y >= 120) {
+            e.entryPhase = false;
+            e.dy = 0;
+            e.bossT = 0;
+          }
+        } else {
+          e.bossT = (e.bossT || 0) + dt;
+          e.dx = Math.sin(e.bossT * 0.8) * 140;
+          e.dy = Math.sin(e.bossT * 0.3) * 30;
+          e.y = Math.max(80, Math.min(280, e.y));
+        }
       }
       if(e.shootRate&&e.fireAccum>=e.shootRate&&e.y<600){e.fireAccum=0;this.enemyShoot(e);}
       if(e.y>680||e.y<-100||e.x<-100||e.x>580){if(!e.boss)this.enemies.splice(i,1);continue;}
@@ -380,12 +395,30 @@ class Game {
     if(p.hp<=0){this.spawnExplosion(p.x,p.y,80,'#ff8800');this.triggerGameOver();}
   }
 
-  updateWave(dt){
-    if(this.bossActive) return;
-    this.waveSpawnAccum+=dt;
-    const interval=Math.max(0.4,2.0-this.wave*0.1);
-    if(this.waveSpawnAccum>=interval){this.waveSpawnAccum=0;this.spawnEnemy();}
-    if(this.wave>=this.nextBossWave&&this.enemies.length===0) this.triggerBoss();
+  updateWave(dt) {
+    if (this.bossActive) return;
+
+    // Advance wave by kill count
+    const killsNeeded = 8 + this.wave * 2;
+    if (this.killCount >= this.waveKillThreshold) {
+      this.wave++;
+      this.waveKillThreshold += killsNeeded;
+    }
+
+    // Spawn enemies on a timer
+    this.waveSpawnAccum += dt;
+    const interval = Math.max(0.4, 2.0 - this.wave * 0.1);
+    if (this.waveSpawnAccum >= interval) {
+      this.waveSpawnAccum = 0;
+      this.spawnEnemy();
+    }
+
+    // Trigger boss only when conditions are stable
+    if (this.wave >= this.nextBossWave &&
+      this.enemies.length === 0 &&
+      !this.bossActive) {
+      this.triggerBoss();
+    }
   }
 
   start(){this.running=true;this.spawnWave();}
@@ -406,15 +439,25 @@ class Game {
     this.enemies.push(e);
   }
 
-  triggerBoss(){
-    this.bossActive=true; this.nextBossWave+=5;
-    const bw=document.getElementById('bossWarning');
-    bw.style.opacity='1';
-    setTimeout(()=>{
-      bw.style.opacity='0';
-      const hp=400+this.wave*50;
-      this.enemies.push({x:240,y:-60,dx:0,dy:30,hp,maxHp:hp,size:40,type:'boss',color:'#ff2200',behavior:'boss',shootRate:0.8,boss:true,ramDmg:50});
-    },2000);
+  triggerBoss() {
+    if (this.bossActive) return; // guard against re-entry
+    this.bossActive = true;
+    this.nextBossWave += 5;
+    const bw = document.getElementById('bossWarning');
+    bw.style.opacity = '1';
+    setTimeout(() => {
+      if (!this.running) return; // don't spawn if game ended during delay
+      bw.style.opacity = '0';
+      const hp = 400 + this.wave * 50;
+      this.enemies.push({
+        x: 240, y: -60, dx: 0, dy: 30,
+        hp, maxHp: hp, size: 40,
+        type: 'boss', color: '#ff2200',
+        behavior: 'boss', shootRate: 0.8,
+        boss: true, ramDmg: 50,
+        entryPhase: true  // Separate entry from combat
+      });
+    }, 2000);
   }
 
   triggerNuke(){
@@ -450,7 +493,13 @@ class Game {
     }
   }
   updateParticles(dt){for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.x+=p.dx*dt;p.y+=p.dy*dt;p.dx*=0.92;p.dy*=0.92;p.life-=dt;if(p.life<=0)this.particles.splice(i,1);}}
-  updateAbilities(dt){for(const ab of this.abilities) if(ab.cdLeft>0) ab.cdLeft=Math.max(0,ab.cdLeft-dt);}
+ updateAbilities(dt) {
+    for (const ab of this.abilities) {
+      if (ab.cdLeft > 0) {
+        ab.cdLeft = Math.max(0, ab.cdLeft - dt);
+      }
+    }
+  }
   updateMultiplier(dt){if(this.multiplierTimer>0){this.multiplierTimer-=dt;if(this.multiplierTimer<=0)this.multiplier=1;}}
   triggerGameOver(){this.running=false;this.gameOver=true;setTimeout(()=>showGameOver(this),1500);}
 
@@ -460,7 +509,8 @@ class Game {
     document.getElementById('rightStats').innerHTML=`HP ${Math.max(0,Math.ceil(p.hp))}/${p.maxHp}<br>SH ${Math.ceil(p.shield)}/${p.maxShield}<br>KILLS ${this.killCount}`;
     for(let i=0;i<3;i++){
       const ab=this.abilities[i];
-      document.getElementById(`ab${i+1}cd`).style.height=(ab.cdLeft/ab.cd*100)+'%';
+     const pct = ab.cd > 0 ? Math.min(1, ab.cdLeft / ab.cd) * 100 : 0;
+      document.getElementById(`ab${i + 1}cd`).style.height = pct + '%';
       document.getElementById(`ab${i+1}icon`).textContent=ab.icon;
     }
   }
@@ -650,25 +700,25 @@ function buildShipSelect(){
   });
 }
 
-function showGameOver(game){
-  game.unbindInput();
-  const themeLabel=game.theme.name;
-  const ov=document.getElementById('overlay');
-  ov.innerHTML=`
+  function showGameOver(game) {
+    game.unbindInput();
+    const themeLabel = BG_THEMES[game.themeIdx]?.name ?? 'UNKNOWN SECTOR';
+    const ov = document.getElementById('overlay');
+    ov.innerHTML = `
     <h1 style="color:#ff4444;text-shadow:0 0 20px #ff4444">GAME<br>OVER</h1>
     <div style="font-size:6px;color:#666;margin-top:-6px">${themeLabel}</div>
     <div style="font-size:7px;color:#aaa;line-height:2.4;text-align:center">
-      SCORE<br><span style="font-size:14px;color:#00ffcc">${game.score.toString().padStart(7,'0')}</span><br>
+      SCORE<br><span style="font-size:14px;color:#00ffcc">${game.score.toString().padStart(7, '0')}</span><br>
       WAVE <span style="color:#00ffcc">${game.wave}</span> &nbsp;|&nbsp;
       KILLS <span style="color:#00ffcc">${game.killCount}</span><br>
       TIME <span style="color:#00ffcc">${Math.floor(game.elapsed)}s</span>
     </div>
     <button class="btn" id="retryBtn">RETRY</button>
     <button class="btn dim" id="menuBtn">MENU</button>`;
-  ov.style.display='flex';
-  document.getElementById('retryBtn').addEventListener('click',()=>startGame(SHIPS[selectedShip]));
-  document.getElementById('menuBtn').addEventListener('click',()=>showMenu());
-}
+    ov.style.display = 'flex';
+    document.getElementById('retryBtn').addEventListener('click', () => startGame(SHIPS[selectedShip]));
+    document.getElementById('menuBtn').addEventListener('click', () => showMenu());
+  }
 
 function showMenu(){
   const ov=document.getElementById('overlay');
@@ -686,11 +736,11 @@ function showMenu(){
 let currentGame=null, animFrame=null, lastTime=0;
 
 function startGame(shipDef){
-  document.getElementById('overlay').style.display='none';
-  if(animFrame) cancelAnimationFrame(animFrame);
-  if(currentGame) currentGame.unbindInput();
-  // Pick a random background theme each run
-  const themeIdx = Math.floor(Math.random()*BG_THEMES.length);
+   document.getElementById('overlay').style.display = 'none';
+  if (animFrame) cancelAnimationFrame(animFrame);
+  if (currentGame) currentGame.unbindInput();
+  shipDef.abilities.forEach(a => { a.cdLeft = 0; });
+  const themeIdx = Math.floor(Math.random() * BG_THEMES.length);
   currentGame=new Game(shipDef, themeIdx);
   currentGame.bindInput();
   currentGame.start();
